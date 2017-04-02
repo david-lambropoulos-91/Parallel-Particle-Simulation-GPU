@@ -54,7 +54,6 @@ __global__ void compute_forces_gpu(particle_t * particles, int n, int* thread_of
 	int workingThreads = postparticles - preparticles;
 	if(threadIdx.x >= workingThreads)
 		return;
-	printf("a");
 
 	//Total shared memory allocation: 6 kb
 	__shared__ particle_t local[256];//2kb
@@ -90,7 +89,6 @@ __global__ void compute_forces_gpu(particle_t * particles, int n, int* thread_of
 			haloBelow[threadIdx.x] = particles[bHaloStart + threadIdx.x];
 	}
 
-	printf("b");
 	__syncthreads();
 	//Now do binning for all particles in every thread, 
 	//and also bin the hal o regions if they exist.
@@ -112,11 +110,9 @@ __global__ void compute_forces_gpu(particle_t * particles, int n, int* thread_of
 	for(int i = 0; i < bHaloSize; i++){
 		apply_force_gpu(local[threadIdx.x], haloBelow[i]);
 	}
-	printf("c");
 	//Potentially need to synchronize here...? Maybe not.
 	//Copy shared local back into global here
 	particles[preparticles + threadIdx.x] = local[threadIdx.x];
-	printf("d");
 }
 
 __global__ void move_gpu (particle_t * particles, int n, double size)
@@ -204,6 +200,7 @@ int main( int argc, char **argv )
 	printf("Bins sorted\n");
 	//Create the sorted particle array and row sizes/offsets array.
 	int num_rows = 0;
+	int accum = 0;
 	thread_rows[0] = 0;
 	row_offsets[0] = bins[0].size();
 	for(int i = 0; i < num_bin_row; i++){
@@ -211,12 +208,16 @@ int main( int argc, char **argv )
 		memcpy(&sorted[row_sizes[i]], bins[i].data(), sizeof(particle_t) * bins[i].size());
 		row_offsets[i+1] = row_offsets[i] + bins[i].size();
 		//Latter part of loop handles cuda thread row allocation
-		num_rows += row_sizes[i];
-		if(num_rows > 256){
+		accum += row_sizes[i];
+		if(accum > 256){
+			if(num_rows == 0) {
+				printf("Num_rows = 0\n");
+				return;
+			}
 			thread_rows[blks] = num_rows;
 			blks++;
 			thread_offset[blks] = i;
-			num_rows = 0;
+			accum = row_sizes[i];
 		}
 		num_rows++;
 	}
@@ -279,12 +280,16 @@ int main( int argc, char **argv )
 			memcpy(&sorted[row_sizes[i]], bins[i].data(), sizeof(particle_t) * bins[i].size());
 			row_offsets[i+1] = row_offsets[i] + bins[i].size();
 			//Latter part of loop handles cuda thread row allocation
-			num_rows += row_sizes[i];
-			if(num_rows > 256){
+			accum += row_sizes[i];
+			if(accum > 256){
+				if(num_rows == 0) {
+					printf("Num_rows = 0\n");
+					return;
+				}
 				thread_rows[blks] = num_rows;
 				blks++;
 				thread_offset[blks] = i;
-				num_rows = 0;
+				accum = row_sizes[i];
 			}
 			num_rows++;
 		}
