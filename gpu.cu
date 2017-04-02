@@ -255,31 +255,27 @@ int main( int argc, char **argv )
 		printf("move_gpu complete\n");
 		//This may cause a lot of overhead... 
 		//If we manage to do bookkeeping within move_gpu, we will not need this copy overhead..
-		cudaMemcpy(sorted, d_particles, n * sizeof(particle_t), cudaMemcpyDeviceToHost);
+		cudaMemcpy(particles, d_particles, n * sizeof(particle_t), cudaMemcpyDeviceToHost);
 		
 		//
 		//  save if necessary
 		//
 		if( fsave && (step%SAVEFREQ) == 0 ) {
 		// Copy the particles back to the CPU
-			cudaMemcpy(particles, d_particles, n * sizeof(particle_t), cudaMemcpyDeviceToHost);
+			//cudaMemcpy(particles, d_particles, n * sizeof(particle_t), cudaMemcpyDeviceToHost);
 			save( fsave, n, particles);
 		}
 		for (int i = 0; i < num_bin_row; i++)
 			bins[i].clear();
 		//put particles in row bins according to their y position
 		for (int j = 0; j < n; j++) {
-			int y = floor(sorted[j].y / binsize);
-			bins[y].push_back(sorted[j]);
+			int y = floor(particles[j].y / binsize);
+			bins[y].push_back(particles[j]);
 		}
 		//Create the sorted particle array and row sizes/offsets array.
-		int num_rows = 0;
-		thread_rows[0] = 0;
-		row_offsets[0] = bins[0].size();
 		accum = 0;
 		blks = 0;
 		num_rows = 0;
-
 		for(int i = 0; i < num_bin_row; i++){
 			row_sizes[i] = bins[i].size();
 			memcpy(&sorted[row_sizes[i]], bins[i].data(), sizeof(particle_t) * bins[i].size());
