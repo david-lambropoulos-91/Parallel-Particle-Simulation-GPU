@@ -208,16 +208,17 @@ int main( int argc, char **argv )
 		row_offsets[i+1] = row_offsets[i] + bins[i].size();
 		//Latter part of loop handles cuda thread row allocation
 		num_rows += row_sizes[i];
-		if(accum > 256){
+		if(num_rows > 256){
 			thread_rows[blks] = num_rows;
 			blks++;
-			thread_offset[ai] = i;
+			thread_offset[blks] = i;
 			num_rows = 0;
 		}
 		num_rows++;
 	}
 	//We can only malloc space for device thread offsets after we know how large blks is.
-    int* d_toff, d_roff;
+    int* d_toff;
+    int* d_roff;
     cudaMalloc((void **) &d_toff, blks * sizeof(int));
     cudaMalloc((void **) &d_roff, (num_bin_row+1) * sizeof(int));
 
