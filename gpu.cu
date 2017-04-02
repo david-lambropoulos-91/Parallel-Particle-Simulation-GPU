@@ -4,6 +4,8 @@
 #include <math.h>
 #include <cuda.h>
 #include "common.h"
+#include <vector>
+#include <string.h>
 
 #define NUM_THREADS 256
 
@@ -43,7 +45,7 @@ __device__ void apply_force_gpu(particle_t &particle, particle_t &neighbor)
 __global__ void compute_forces_gpu(particle_t * particles, int n, int* thread_offset, int* row_offset)
 {
   // Get thread (particle) ID
-	int tid = threadIdx.x + blockIdx.x * blockDim.x;
+	//int tid = threadIdx.x + blockIdx.x * blockDim.x;
 	//if(tid >= n) return;
 	
 	int preparticles = row_offset[thread_offset[blockIdx.x]];
@@ -146,31 +148,6 @@ __global__ void move_gpu (particle_t * particles, int n, double size)
     }
 
 }
-//Partition particles into <num_bin_row> bins based on their row location. 
-void partition_bins(vector<particle_t> bins[], particle_t* particles, int* particles_per_block, int n, int num_bin_row, int n_proc) {
-    
-    memset ( particles_per_block, 0, sizeof(int)*num_bin_row);
-    //put particles in bins according to their locations
-    for (int j = 0; j < n; j++) {
-        //int x = floor(particles[j].x / binsize);
-        int y = floor(particles[j].y / binsize);
-        bins[y].push_back(particles[j]);
-        particles_per_block[y]++;
-        //If this particle is in a halo bin, we must also import it twice.
-        int boundcheck = y % rows_per_block;
-        if(boundcheck == 0 && y != 0 ){
-            //We now know that y is on a boundary, and must be included in block_index-1.
-            bins[y-1].push_back(particles[j]);
-            particles_per_block[y-1]++;
-        }
-        else if(boundcheck == rows_per_block-1 && y != num_bin_row-1){
-            //We now know that y is on a boundary, and must be included in block_index+1.
-            bins[block_index+1].push_back(particles[j]);
-            particles_per_block[block_index+1]++;
-        }
-    }
-}
-
 
 int main( int argc, char **argv )
 {    
@@ -243,19 +220,7 @@ int main( int argc, char **argv )
     int* d_toff, d_roff;
     cudaMalloc((void **) &d_toff, blks * sizeof(int));
     cudaMalloc((void **) &d_roff, (num_bin_row+1) * sizeof(int));
-/*
-    cudaThreadSynchronize();
-    double copy_time = read_timer( );
 
-    // Copy the *Sorted* particles to the GPU
-    cudaMemcpy(d_particles, sorted, n * sizeof(particle_t), cudaMemcpyHostToDevice);
-    // We also want thread offsets and row offsets
-    cudaMemcpy(d_toff, sorted, blks * sizeof(int), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_roff, sorted, (num_bin_row+1) * sizeof(int), cudaMemcpyHostToDevice);
-
-    cudaThreadSynchronize();
-    copy_time = read_timer( ) - copy_time;*/
-    
     //
     //  simulate a number of time steps
     //
