@@ -239,7 +239,7 @@ int main( int argc, char **argv )
 		cudaMemcpy(d_particles, sorted, n * sizeof(particle_t), cudaMemcpyHostToDevice);
 		// We also want thread offsets and row offsets
 		cudaMemcpy(d_toff, thread_offset, blks * sizeof(int), cudaMemcpyHostToDevice);
-		cudaMemcpy(d_roff, row_offset, (num_bin_row+1) * sizeof(int), cudaMemcpyHostToDevice);
+		cudaMemcpy(d_roff, row_offsets, (num_bin_row+1) * sizeof(int), cudaMemcpyHostToDevice);
 		printf("particles and offsets memcpyied\n");
 		cudaThreadSynchronize();
 		copy_time = read_timer( ) - copy_time;
