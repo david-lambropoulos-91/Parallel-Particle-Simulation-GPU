@@ -270,6 +270,8 @@ int main( int argc, char **argv )
 		//put particles in row bins according to their y position
 		for (int j = 0; j < n; j++) {
 			int y = floor(particles[j].y / binsize);
+			if(y >= num_bin_row)
+				printf("y>=numbinrow\n");
 			bins[y].push_back(particles[j]);
 		}
 		//Create the sorted particle array and row sizes/offsets array.
