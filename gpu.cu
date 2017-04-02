@@ -212,7 +212,7 @@ int main( int argc, char **argv )
 		if(accum > 256){
 			if(num_rows == 0) {
 				printf("Num_rows = 0\n");
-				return;
+				return -1;
 			}
 			thread_rows[blks] = num_rows;
 			blks++;
@@ -284,7 +284,7 @@ int main( int argc, char **argv )
 			if(accum > 256){
 				if(num_rows == 0) {
 					printf("Num_rows = 0\n");
-					return;
+					return -1;
 				}
 				thread_rows[blks] = num_rows;
 				blks++;
