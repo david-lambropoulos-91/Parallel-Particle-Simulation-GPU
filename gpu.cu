@@ -6,6 +6,8 @@
 #include "common.h"
 #include <vector>
 #include <string.h>
+#include <errno.h>
+
 
 #define NUM_THREADS 256
 
@@ -150,8 +152,14 @@ __global__ void move_gpu (particle_t * particles, int n, double size)
 
 int main( int argc, char **argv )
 {
+	cudaError_t err;
+
 	// This takes a few seconds to initialize the runtime
-	cudaThreadSynchronize(); 
+	if( ( err =cudaThreadSynchronize( ) ) != cudaSuccess )
+	{
+		fprintf(stderr, "cudaThreadSynchronize() not successful at line %d in file %s\nError Output: %s\n", __LINE__, __FILE__, cudaGetErrorString(err));
+		return -1;
+	}
 
 	if( find_option( argc, argv, "-h" ) >= 0 )
 	{
@@ -167,17 +175,18 @@ int main( int argc, char **argv )
 	char *savename = read_string( argc, argv, "-o", NULL );
 	
 	FILE *fsave = savename ? fopen( savename, "w" ) : NULL;
+	
 	particle_t *particles;
-	if((particles = (particle_t*) malloc( n * sizeof(particle_t) )) == NULL )
+	if( ( particles = (particle_t*) malloc( n * sizeof( particle_t ) ) ) == NULL )
 	{
-		fprintf(stderr, "particles malloc NULL at line %d in file %s\n", __LINE__, __FILE__);
+		fprintf( stderr, "particles malloc NULL at line %d in file %s\n", __LINE__, __FILE__ );
 		return -1;
 	}
 
 	particle_t *sorted;
-	if((sorted = (particle_t*) malloc( n * sizeof(particle_t) )) == NULL )
+	if( ( sorted = ( particle_t* ) malloc( n * sizeof( particle_t ) ) ) == NULL )
 	{
-		fprintf(stderr, "sorted malloc NULL at line %d in file %s\n", __LINE__, __FILE__);
+		fprintf( stderr, "sorted malloc NULL at line %d in file %s\n", __LINE__, __FILE__ );
 		return -1;
 	}
 
@@ -185,72 +194,76 @@ int main( int argc, char **argv )
 
 	// GPU particle data structure
 	particle_t * d_particles;
-	if((cudaMalloc((void **) &d_particles, n * sizeof(particle_t))) == cudaErrorMemoryAllocation )
+	if( ( err = cudaMalloc( ( void ** ) &d_particles, n * sizeof( particle_t ) ) ) == cudaErrorMemoryAllocation )
 	{
-		fprintf(stderr, "d_particles cudaMalloc cudaErrorMemoryAllocation at line %d in file %s\n", __LINE__, __FILE__ );
+		fprintf(stderr, "d_particles cudaMalloc cudaErrorMemoryAllocation at line %d in file %s\nError Output: %s\n", __LINE__, __FILE__, cudaGetErrorString(err) );
 		return -1;
 	}
 
-	double size = sqrt(density * n); //This is from common.cpp
+	double size = sqrt( density * n ); //This is from common.cpp
 	int num_bin_row = ceil(size / binsize);
 
 
 	set_size( n );
 
 	int* row_sizes;
-	if( ( row_sizes = (int*) malloc(sizeof(int) * num_bin_row)) == NULL)
+	if( ( row_sizes = ( int* ) malloc( sizeof( int ) * num_bin_row ) ) == NULL )
 	{
-		fprintf(stderr, "row_size malloc NULL at line %d in file %s\n", __LINE__, __FILE__);
+		fprintf( stderr, "row_size malloc NULL at line %d in file %s\n", __LINE__, __FILE__ );
 		return -1;
 	}
 
 	int* row_offsets;
-	if( ( row_offsets = (int*) malloc(sizeof(int) * num_bin_row+1)) == NULL )
+	if( ( row_offsets = ( int* ) malloc( sizeof( int ) * num_bin_row + 1 ) ) == NULL )
 	{
-		fprintf(stderr, "row_offsets malloc NULL at line %d in file %s\n", __LINE__, __FILE__);		
+		fprintf( stderr, "row_offsets malloc NULL at line %d in file %s\n", __LINE__, __FILE__ );
 		return -1;
 	}
 
 	int* row_capacity;
-	if((row_capacity = (int*) malloc(sizeof(int) * num_bin_row)) == NULL )
+	if( ( row_capacity = ( int* ) malloc( sizeof( int ) * num_bin_row ) ) == NULL )
 	{
-		fprintf(stderr, "row_capacity malloc NULL at line %d in file %s\n", __LINE__, __FILE__);
+		fprintf( stderr, "row_capacity malloc NULL at line %d in file %s\n", __LINE__, __FILE__ );
 		return -1;
 	}
 
 	//This is most likely overallocation, but there is no way it will exceed this boundary.
 	int* thread_rows;
-	if((thread_rows = (int*) malloc(sizeof(int) * num_bin_row)) == NULL )
+	if( ( thread_rows = ( int* ) malloc( sizeof( int ) * num_bin_row ) ) == NULL )
 	{
-		fprintf(stderr, "thread_rows malloc NULL at line %d in file %s\n", __LINE__, __FILE__);
+		fprintf( stderr, "thread_rows malloc NULL at line %d in file %s\n", __LINE__, __FILE__ );
 		return -1;
 	}
 
 	int* thread_offset;
-	if((thread_offset = (int*) malloc(sizeof(int) * num_bin_row+1)) == NULL )
+	if( ( thread_offset = ( int* ) malloc( sizeof( int ) * num_bin_row + 1 ) ) == NULL )
 	{
-		fprintf(stderr, "thread_offset malloc NULL at line %d in file %s\n", __LINE__, __FILE__);
+		fprintf( stderr, "thread_offset malloc NULL at line %d in file %s\n", __LINE__, __FILE__ );
 		return -1;
 	}
-	printf("Malloced arrays properly\n");
+
+	printf( "Malloced arrays properly\n" );
 	
-	std::vector<particle_t> bins[num_bin_row];
+	std::vector<particle_t> bins[ num_bin_row ];
 
 	init_particles( n, particles );
 
 	//put particles in row bins according to their y position
-	for (int j = 0; j < n; j++) {
-		int y = floor(particles[j].y / binsize);
-		bins[y].push_back(particles[j]);
+	for ( int j = 0; j < n; j++ ) 
+	{
+		int y = floor( particles[ j ].y / binsize );
+		bins[ y ].push_back( particles[ j ] );
 	}
+
 	printf("Bins sorted\n");
 	//Create the sorted particle array and row sizes/offsets array.
 	int num_rows = 0;
 	int accum = 0;
 	int blks = 0;
-	thread_rows[0] = 0;
-	row_offsets[0] = 0;
-	for(int i = 0; i < num_bin_row; i++)
+	thread_rows[ 0 ] = 0;
+	row_offsets[ 0 ] = 0;
+
+	for( int i = 0; i < num_bin_row; i++ )
 	{
 		row_sizes[ i ] = bins[ i ].size( );
 		memcpy( &sorted[ row_sizes[ i ] ], bins[ i ].data( ), sizeof( particle_t ) * bins[ i ].size( ) );
@@ -260,7 +273,7 @@ int main( int argc, char **argv )
 		
 		if( accum > 256 )
 		{
-			if(num_rows == 0) 
+			if( num_rows == 0 ) 
 			{
 				printf( "Num_rows = 0\n" );
 				return -1;
@@ -278,91 +291,119 @@ int main( int argc, char **argv )
 	//We can only malloc space for device thread offsets after we know how large blks is.
 	int* d_toff;
 	int* d_roff;
-	if( ( cudaMalloc((void **) &d_toff, blks * sizeof(int))) == cudaErrorMemoryAllocation )
+	if( ( err = cudaMalloc( ( void **) &d_toff, blks * sizeof( int ) ) ) == cudaErrorMemoryAllocation )
 	{
-		fprintf(stderr, "d_toff cudaMalloc cudaErrorMemoryAllocation at line %d in file %s\n", __LINE__, __FILE__);
+		fprintf( stderr, "d_toff cudaMalloc cudaErrorMemoryAllocation at line %d in file %s\nError Output: %s\n", __LINE__, __FILE__, cudaGetErrorString(err) );
 		return -1;
 	}
 
-	if( ( cudaMalloc((void **) &d_roff, (num_bin_row+1) * sizeof(int))) == cudaErrorMemoryAllocation )
+	if( ( err = cudaMalloc( ( void ** ) &d_roff, ( num_bin_row + 1 ) * sizeof( int ) ) ) == cudaErrorMemoryAllocation )
 	{
-		fprintf(stderr, "d_roff cudaMalloc cudaErrorMemoryAllocation at line %d in file %s\n", __LINE__, __FILE__);
+		fprintf( stderr, "d_roff cudaMalloc cudaErrorMemoryAllocation at line %d in file %s\nError Output: %s\n", __LINE__, __FILE__, cudaGetErrorString(err) );
 		return -1;
 	}
 
 	//
 	//  simulate a number of time steps
 	//
-	cudaThreadSynchronize();
+	if( ( err = cudaThreadSynchronize( ) ) != cudaSuccess )
+	{
+		fprintf( stderr, "cudaThreadSynchronize() not successful at line %d in file %s\nError Output: %s\n", __LINE__, __FILE__, cudaGetErrorString(err) );
+		return -1;
+	}
+
 	double simulation_time = read_timer( );
 
 	for( int step = 0; step < NSTEPS; step++ )
 	{
-		cudaThreadSynchronize();
+		cudaThreadSynchronize( );
 		double copy_time = read_timer( );
 
 		// Copy the *Sorted* particles to the GPU
-		cudaMemcpy(d_particles, sorted, n * sizeof(particle_t), cudaMemcpyHostToDevice);
+		cudaMemcpy( d_particles, sorted, n * sizeof( particle_t ), cudaMemcpyHostToDevice );
+
+//		if((err = cudaGetLastError()) != cudaSuccess) 
+//		{
+//			fprintf(stderr, "cudaMemcpy not successful at line %d in file %s\nError Output: %s\ni=%d", __LINE__, __FILE__, cudaGetErrorString(err), step );
+//		}
 		// We also want thread offsets and row offsets
-		cudaMemcpy(d_toff, thread_offset, blks * sizeof(int), cudaMemcpyHostToDevice);
-		cudaMemcpy(d_roff, row_offsets, (num_bin_row+1) * sizeof(int), cudaMemcpyHostToDevice);
+		
+		cudaMemcpy( d_toff, thread_offset, blks * sizeof( int ), cudaMemcpyHostToDevice );
+		cudaMemcpy( d_roff, row_offsets, ( num_bin_row + 1 ) * sizeof( int ), cudaMemcpyHostToDevice );
 		//printf("particles and offsets memcpyied\n");
-		cudaThreadSynchronize();
+		
+		cudaThreadSynchronize( );
 		copy_time = read_timer( ) - copy_time;
 		copy_time_accum+= copy_time;
-		compute_forces_gpu <<< blks, NUM_THREADS >>> (d_particles, n, d_toff, d_roff);
+		compute_forces_gpu <<< blks, NUM_THREADS >>> ( d_particles, n, d_toff, d_roff );
+
 		//printf("Compute_Forces complete\n");
-		move_gpu <<< blks, NUM_THREADS >>> (d_particles, n, size);
+		move_gpu <<< blks, NUM_THREADS >>> ( d_particles, n, size );
+
 		//printf("move_gpu complete\n");
 		//This may cause a lot of overhead... 
 		//If we manage to do bookkeeping within move_gpu, we will not need this copy overhead..
-		cudaMemcpy(particles, d_particles, n * sizeof(particle_t), cudaMemcpyDeviceToHost);
+		cudaMemcpy( particles, d_particles, n * sizeof( particle_t ), cudaMemcpyDeviceToHost );
 		
 		//
 		//  save if necessary
 		//
-		if( fsave && (step%SAVEFREQ) == 0 ) {
+		if( fsave && ( step%SAVEFREQ ) == 0 ) 
+		{
 		// Copy the particles back to the CPU
 			//cudaMemcpy(particles, d_particles, n * sizeof(particle_t), cudaMemcpyDeviceToHost);
 			save( fsave, n, particles);
 		}
-		for (int i = 0; i < num_bin_row; i++)
-			bins[i].clear();
-		//put particles in row bins according to their y position
-		for (int j = 0; j < n; j++) {
-			int y = floor(particles[j].y / binsize);
-			if(y >= num_bin_row)
-				printf("y>=numbinrow\n");
-			bins[y].push_back(particles[j]);
+		
+		for ( int i = 0; i < num_bin_row; i++ )
+		{
+			bins[ i ].clear( );
 		}
+
+		//put particles in row bins according to their y position
+		for ( int j = 0; j < n; j++ ) 
+		{
+			int y = floor( particles[ j ].y / binsize );
+			
+			if(y >= num_bin_row)
+			{
+				printf( "y>=numbinrow\n" );
+			}
+			bins[ y ].push_back( particles[ j ] );
+		}
+
 		//Create the sorted particle array and row sizes/offsets array.
 		accum = 0;
 		blks = 0;
 		num_rows = 0;
-		for(int i = 0; i < num_bin_row; i++){
-			row_sizes[i] = bins[i].size();
-			memcpy(&sorted[row_sizes[i]], bins[i].data(), sizeof(particle_t) * bins[i].size());
-			row_offsets[i+1] = row_offsets[i] + bins[i].size();
+
+		for( int i = 0; i < num_bin_row; i++ )
+		{
+			row_sizes[ i ] = bins[ i ].size( );
+			memcpy( &sorted[ row_sizes[ i ] ], bins[ i ].data( ), sizeof( particle_t ) * bins[ i ].size( ) );
+			row_offsets[ i + 1 ] = row_offsets[ i ] + bins[ i ].size( );
 			//Latter part of loop handles cuda thread row allocation
-			accum += row_sizes[i];
-			if(accum > 256){
-				if(num_rows == 0) {
-					printf("Num_rows = 0\n");
+			accum += row_sizes[ i ];
+			if( accum > 256 )
+			{
+				if( num_rows == 0 ) 
+				{
+					printf( "Num_rows = 0\n" );
 					return -1;
 				}
-				thread_rows[blks] = num_rows;
+				thread_rows[ blks ] = num_rows;
 				blks++;
-				thread_offset[blks] = i;
-				accum = row_sizes[i];
+				thread_offset[ blks ] = i;
+				accum = row_sizes[ i ];
 			}
 			num_rows++;
 		}
 
 	}
-	cudaThreadSynchronize();
+	cudaThreadSynchronize( );
 	simulation_time = read_timer( ) - simulation_time;
 	
-	printf( "CPU-GPU copy time = %g seconds\n", copy_time_accum);
+	printf( "CPU-GPU copy time = %g seconds\n", copy_time_accum );
 	printf( "n = %d, simulation time = %g seconds\n", n, simulation_time );
 	
 	free( particles );
@@ -372,11 +413,13 @@ int main( int argc, char **argv )
 	free( row_capacity );
 	free( thread_rows );
 	free( thread_offset );
-	cudaFree(d_roff);
-	cudaFree(d_toff);
-	cudaFree(d_particles);
+	cudaFree( d_roff );
+	cudaFree( d_toff );
+	cudaFree( d_particles );
 	if( fsave )
+	{
 		fclose( fsave );
-	
+	}
+
 	return 0;
 }
