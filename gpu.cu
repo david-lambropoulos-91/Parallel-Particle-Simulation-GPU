@@ -167,13 +167,29 @@ int main( int argc, char **argv )
 	char *savename = read_string( argc, argv, "-o", NULL );
 	
 	FILE *fsave = savename ? fopen( savename, "w" ) : NULL;
-	particle_t *particles = (particle_t*) malloc( n * sizeof(particle_t) );
-	particle_t *sorted = (particle_t*) malloc( n * sizeof(particle_t) );
+	particle_t *particles;
+	if((particles = (particle_t*) malloc( n * sizeof(particle_t) )) == NULL )
+	{
+		fprintf(stderr, "particles malloc NULL at line %d in file %s\n", __LINE__, __FILE__);
+		return -1;
+	}
+
+	particle_t *sorted;
+	if((sorted = (particle_t*) malloc( n * sizeof(particle_t) )) == NULL )
+	{
+		fprintf(stderr, "sorted malloc NULL at line %d in file %s\n", __LINE__, __FILE__);
+		return -1;
+	}
+
 	double copy_time_accum = 0;
 
 	// GPU particle data structure
 	particle_t * d_particles;
-	cudaMalloc((void **) &d_particles, n * sizeof(particle_t));
+	if((cudaMalloc((void **) &d_particles, n * sizeof(particle_t))) == cudaErrorMemoryAllocation )
+	{
+		fprintf(stderr, "d_particles cudaMalloc cudaErrorMemoryAllocation at line %d in file %s\n", __LINE__, __FILE__ );
+		return -1;
+	}
 
 	double size = sqrt(density * n); //This is from common.cpp
 	int num_bin_row = ceil(size / binsize);
@@ -181,13 +197,43 @@ int main( int argc, char **argv )
 
 	set_size( n );
 
-	int* row_sizes = (int*) malloc(sizeof(int) * num_bin_row);
-	int* row_offsets = (int*) malloc(sizeof(int) * num_bin_row+1);
-	int* row_capacity = (int*) malloc(sizeof(int) * num_bin_row);
+	int* row_sizes;
+	if( ( row_sizes = (int*) malloc(sizeof(int) * num_bin_row)) == NULL)
+	{
+		fprintf(stderr, "row_size malloc NULL at line %d in file %s\n", __LINE__, __FILE__);
+		return -1;
+	}
+
+	int* row_offsets;
+	if( ( row_offsets = (int*) malloc(sizeof(int) * num_bin_row+1)) == NULL )
+	{
+		fprintf(stderr, "row_offsets malloc NULL at line %d in file %s\n", __LINE__, __FILE__);		
+		return -1;
+	}
+
+	int* row_capacity;
+	if((row_capacity = (int*) malloc(sizeof(int) * num_bin_row)) == NULL )
+	{
+		fprintf(stderr, "row_capacity malloc NULL at line %d in file %s\n", __LINE__, __FILE__);
+		return -1;
+	}
+
 	//This is most likely overallocation, but there is no way it will exceed this boundary.
-	int* thread_rows = (int*) malloc(sizeof(int) * num_bin_row);
-	int* thread_offset = (int*) malloc(sizeof(int) * num_bin_row+1);
+	int* thread_rows;
+	if((thread_rows = (int*) malloc(sizeof(int) * num_bin_row)) == NULL )
+	{
+		fprintf(stderr, "thread_rows malloc NULL at line %d in file %s\n", __LINE__, __FILE__);
+		return -1;
+	}
+
+	int* thread_offset;
+	if((thread_offset = (int*) malloc(sizeof(int) * num_bin_row+1)) == NULL )
+	{
+		fprintf(stderr, "thread_offset malloc NULL at line %d in file %s\n", __LINE__, __FILE__);
+		return -1;
+	}
 	printf("Malloced arrays properly\n");
+	
 	std::vector<particle_t> bins[num_bin_row];
 
 	init_particles( n, particles );
@@ -204,30 +250,45 @@ int main( int argc, char **argv )
 	int blks = 0;
 	thread_rows[0] = 0;
 	row_offsets[0] = 0;
-	for(int i = 0; i < num_bin_row; i++){
-		row_sizes[i] = bins[i].size();
-		memcpy(&sorted[row_sizes[i]], bins[i].data(), sizeof(particle_t) * bins[i].size());
-		row_offsets[i+1] = row_offsets[i] + bins[i].size();
+	for(int i = 0; i < num_bin_row; i++)
+	{
+		row_sizes[ i ] = bins[ i ].size( );
+		memcpy( &sorted[ row_sizes[ i ] ], bins[ i ].data( ), sizeof( particle_t ) * bins[ i ].size( ) );
+		row_offsets[ i + 1 ] = row_offsets[ i ] + bins[ i ].size( );
 		//Latter part of loop handles cuda thread row allocation
-		accum += row_sizes[i];
-		if(accum > 256){
-			if(num_rows == 0) {
-				printf("Num_rows = 0\n");
+		accum += row_sizes[ i ];
+		
+		if( accum > 256 )
+		{
+			if(num_rows == 0) 
+			{
+				printf( "Num_rows = 0\n" );
 				return -1;
 			}
-			thread_rows[blks] = num_rows;
+	
+			thread_rows[ blks ] = num_rows;
 			blks++;
-			thread_offset[blks] = i;
-			accum = row_sizes[i];
+			thread_offset[ blks ] = i;
+			accum = row_sizes[ i ];
 		}
 		num_rows++;
 	}
-	printf("sorted array populated\n");
+	printf( "sorted array populated\n" );
+	
 	//We can only malloc space for device thread offsets after we know how large blks is.
 	int* d_toff;
 	int* d_roff;
-	cudaMalloc((void **) &d_toff, blks * sizeof(int));
-	cudaMalloc((void **) &d_roff, (num_bin_row+1) * sizeof(int));
+	if( ( cudaMalloc((void **) &d_toff, blks * sizeof(int))) == cudaErrorMemoryAllocation )
+	{
+		fprintf(stderr, "d_toff cudaMalloc cudaErrorMemoryAllocation at line %d in file %s\n", __LINE__, __FILE__);
+		return -1;
+	}
+
+	if( ( cudaMalloc((void **) &d_roff, (num_bin_row+1) * sizeof(int))) == cudaErrorMemoryAllocation )
+	{
+		fprintf(stderr, "d_roff cudaMalloc cudaErrorMemoryAllocation at line %d in file %s\n", __LINE__, __FILE__);
+		return -1;
+	}
 
 	//
 	//  simulate a number of time steps
