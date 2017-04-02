@@ -177,7 +177,7 @@ int main( int argc, char **argv )
 
 	double size = sqrt(density * n); //This is from common.cpp
 	int num_bin_row = ceil(size / binsize);
-	int blks = 0;
+
 
 	set_size( n );
 
@@ -201,8 +201,9 @@ int main( int argc, char **argv )
 	//Create the sorted particle array and row sizes/offsets array.
 	int num_rows = 0;
 	int accum = 0;
+	int blks = 0;
 	thread_rows[0] = 0;
-	row_offsets[0] = bins[0].size();
+	row_offsets[0] = 0;
 	for(int i = 0; i < num_bin_row; i++){
 		row_sizes[i] = bins[i].size();
 		memcpy(&sorted[row_sizes[i]], bins[i].data(), sizeof(particle_t) * bins[i].size());
@@ -275,6 +276,10 @@ int main( int argc, char **argv )
 		int num_rows = 0;
 		thread_rows[0] = 0;
 		row_offsets[0] = bins[0].size();
+		accum = 0;
+		blks = 0;
+		num_rows = 0;
+
 		for(int i = 0; i < num_bin_row; i++){
 			row_sizes[i] = bins[i].size();
 			memcpy(&sorted[row_sizes[i]], bins[i].data(), sizeof(particle_t) * bins[i].size());
