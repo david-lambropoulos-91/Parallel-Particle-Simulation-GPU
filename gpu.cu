@@ -87,7 +87,7 @@ __global__ void compute_forces_gpu(particle_t * particles, int n, int* thread_of
 		bHaloSize = bHaloEnd - bHaloStart;
 		if(threadIdx.x < bHaloSize)
 		//Create the lower halo region
-			haloAbove[threadIdx.x] = particles[bHaloStart + threadIdx.x];
+			haloBelow[threadIdx.x] = particles[bHaloStart + threadIdx.x];
 	}
 
 	printf("b");
