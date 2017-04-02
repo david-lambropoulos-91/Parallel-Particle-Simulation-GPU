@@ -238,9 +238,9 @@ int main( int argc, char **argv )
 		// Copy the *Sorted* particles to the GPU
 		cudaMemcpy(d_particles, sorted, n * sizeof(particle_t), cudaMemcpyHostToDevice);
 		// We also want thread offsets and row offsets
-		cudaMemcpy(d_toff, sorted, blks * sizeof(int), cudaMemcpyHostToDevice);
-		cudaMemcpy(d_roff, sorted, (num_bin_row+1) * sizeof(int), cudaMemcpyHostToDevice);
-		printf("particles and offsets memcpy'd\n");
+		cudaMemcpy(d_toff, thread_offset, blks * sizeof(int), cudaMemcpyHostToDevice);
+		cudaMemcpy(d_roff, row_offset, (num_bin_row+1) * sizeof(int), cudaMemcpyHostToDevice);
+		printf("particles and offsets memcpyied\n");
 		cudaThreadSynchronize();
 		copy_time = read_timer( ) - copy_time;
 		copy_time_accum+= copy_time;
