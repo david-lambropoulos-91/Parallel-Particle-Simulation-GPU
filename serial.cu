@@ -3,10 +3,10 @@
 #include <assert.h>
 #include <math.h>
 #include "common.h"
-#include <vector>
+//#include <vector>
 
-typedef vector< particle_t* > gridBin;
-typedef vector< < gridBin > > particleGrid;
+//typedef vector< particle_t* > gridBin;
+//typedef vector< < gridBin > > particleGrid;
 
 using namespace std;
 
