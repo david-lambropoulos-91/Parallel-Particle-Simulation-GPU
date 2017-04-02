@@ -112,7 +112,7 @@ __global__ void compute_forces_gpu(particle_t * particles, int n, int* thread_of
 
 	//Potentially need to synchronize here...? Maybe not.
 	//Copy shared local back into global here
-	particles[threadIdx.x] = local[threadIdx.x];
+	particles[preparticles + threadIdx.x] = local[threadIdx.x];
 
 }
 
