@@ -54,6 +54,8 @@ __global__ void compute_forces_gpu(particle_t * particles, int n, int* thread_of
 	int workingThreads = postparticles - preparticles;
 	if(threadIdx.x >= workingThreads)
 		return;
+	printf("a");
+
 	//Total shared memory allocation: 6 kb
 	__shared__ particle_t local[256];//2kb
 	__shared__ particle_t haloAbove[256];
@@ -68,6 +70,7 @@ __global__ void compute_forces_gpu(particle_t * particles, int n, int* thread_of
 	int bHaloEnd = 0;
 
 	local[threadIdx.x] = particles[preparticles + threadIdx.x]; 
+	
 	if(blockIdx.x > 0 )
 	{
 		tHaloStart = row_offset[thread_offset[blockIdx.x] - 1];
@@ -87,7 +90,7 @@ __global__ void compute_forces_gpu(particle_t * particles, int n, int* thread_of
 			haloAbove[threadIdx.x] = particles[bHaloStart + threadIdx.x];
 	}
 
-
+	printf("b");
 	__syncthreads();
 	//Now do binning for all particles in every thread, 
 	//and also bin the hal o regions if they exist.
@@ -109,11 +112,11 @@ __global__ void compute_forces_gpu(particle_t * particles, int n, int* thread_of
 	for(int i = 0; i < bHaloSize; i++){
 		apply_force_gpu(local[threadIdx.x], haloBelow[i]);
 	}
-
+	printf("c");
 	//Potentially need to synchronize here...? Maybe not.
 	//Copy shared local back into global here
 	particles[preparticles + threadIdx.x] = local[threadIdx.x];
-
+	printf("d");
 }
 
 __global__ void move_gpu (particle_t * particles, int n, double size)
