@@ -24,27 +24,27 @@ extern double size;
 
 __device__ void apply_force_gpu(particle_t &particle, particle_t &neighbor)
 {
-  double dx = neighbor.x - particle.x;
-  double dy = neighbor.y - particle.y;
-  double r2 = dx * dx + dy * dy;
-  if( r2 > cutoff*cutoff )
-      return;
-  //r2 = fmax( r2, min_r*min_r );
-  r2 = (r2 > min_r*min_r) ? r2 : min_r*min_r;
-  double r = sqrt( r2 );
+	double dx = neighbor.x - particle.x;
+	double dy = neighbor.y - particle.y;
+	double r2 = dx * dx + dy * dy;
+	if( r2 > cutoff*cutoff )
+		return;
+	//r2 = fmax( r2, min_r*min_r );
+	r2 = (r2 > min_r*min_r) ? r2 : min_r*min_r;
+	double r = sqrt( r2 );
 
-  //
-  //  very simple short-range repulsive force
-  //
-  double coef = ( 1 - cutoff / r ) / r2 / mass;
-  particle.ax += coef * dx;
-  particle.ay += coef * dy;
+	//
+	//  very simple short-range repulsive force
+	//
+	double coef = ( 1 - cutoff / r ) / r2 / mass;
+	particle.ax += coef * dx;
+	particle.ay += coef * dy;
 
 }
 
 __global__ void compute_forces_gpu(particle_t * particles, int n, int* thread_offset, int* row_offset)
 {
-  // Get thread (particle) ID
+	// Get thread (particle) ID
 	//int tid = threadIdx.x + blockIdx.x * blockDim.x;
 	//if(tid >= n) return;
 	
@@ -119,68 +119,68 @@ __global__ void compute_forces_gpu(particle_t * particles, int n, int* thread_of
 __global__ void move_gpu (particle_t * particles, int n, double size)
 {
 
-  // Get thread (particle) ID
-  int tid = threadIdx.x + blockIdx.x * blockDim.x;
-  if(tid >= n) return;
+	// Get thread (particle) ID
+	int tid = threadIdx.x + blockIdx.x * blockDim.x;
+	if(tid >= n) return;
 
-  particle_t * p = &particles[tid];
-    //
-    //  slightly simplified Velocity Verlet integration
-    //  conserves energy better than explicit Euler method
-    //
-    p->vx += p->ax * dt;
-    p->vy += p->ay * dt;
-    p->x  += p->vx * dt;
-    p->y  += p->vy * dt;
+	particle_t * p = &particles[tid];
+	//
+	//  slightly simplified Velocity Verlet integration
+	//  conserves energy better than explicit Euler method
+	//
+	p->vx += p->ax * dt;
+	p->vy += p->ay * dt;
+	p->x  += p->vx * dt;
+	p->y  += p->vy * dt;
 
-    //
-    //  bounce from walls
-    //
-    while( p->x < 0 || p->x > size )
-    {
-        p->x  = p->x < 0 ? -(p->x) : 2*size-p->x;
-        p->vx = -(p->vx);
-    }
-    while( p->y < 0 || p->y > size )
-    {
-        p->y  = p->y < 0 ? -(p->y) : 2*size-p->y;
-        p->vy = -(p->vy);
-    }
+	//
+	//  bounce from walls
+	//
+	while( p->x < 0 || p->x > size )
+	{
+		p->x  = p->x < 0 ? -(p->x) : 2*size-p->x;
+		p->vx = -(p->vx);
+	}
+	while( p->y < 0 || p->y > size )
+	{
+		p->y  = p->y < 0 ? -(p->y) : 2*size-p->y;
+		p->vy = -(p->vy);
+	}
 
 }
 
 int main( int argc, char **argv )
-{    
-    // This takes a few seconds to initialize the runtime
-    cudaThreadSynchronize(); 
+{
+	// This takes a few seconds to initialize the runtime
+	cudaThreadSynchronize(); 
 
-    if( find_option( argc, argv, "-h" ) >= 0 )
-    {
-        printf( "Options:\n" );
-        printf( "-h to see this help\n" );
-        printf( "-n <int> to set the number of particles\n" );
-        printf( "-o <filename> to specify the output file name\n" );
-        return 0;
-    }
-    
-    int n = read_int( argc, argv, "-n", 1000 );
+	if( find_option( argc, argv, "-h" ) >= 0 )
+	{
+		printf( "Options:\n" );
+		printf( "-h to see this help\n" );
+		printf( "-n <int> to set the number of particles\n" );
+		printf( "-o <filename> to specify the output file name\n" );
+		return 0;
+	}
+	
+	int n = read_int( argc, argv, "-n", 1000 );
 
-    char *savename = read_string( argc, argv, "-o", NULL );
-    
-    FILE *fsave = savename ? fopen( savename, "w" ) : NULL;
-    particle_t *particles = (particle_t*) malloc( n * sizeof(particle_t) );
-    particle_t *sorted = (particle_t*) malloc( n * sizeof(particle_t) );
-    double copy_time_accum = 0;
+	char *savename = read_string( argc, argv, "-o", NULL );
+	
+	FILE *fsave = savename ? fopen( savename, "w" ) : NULL;
+	particle_t *particles = (particle_t*) malloc( n * sizeof(particle_t) );
+	particle_t *sorted = (particle_t*) malloc( n * sizeof(particle_t) );
+	double copy_time_accum = 0;
 
-    // GPU particle data structure
-    particle_t * d_particles;
-    cudaMalloc((void **) &d_particles, n * sizeof(particle_t));
+	// GPU particle data structure
+	particle_t * d_particles;
+	cudaMalloc((void **) &d_particles, n * sizeof(particle_t));
 
-    double size = sqrt(density * n); //This is from common.cpp
-    int num_bin_row = ceil(size / binsize);
-    int blks = 0;
+	double size = sqrt(density * n); //This is from common.cpp
+	int num_bin_row = ceil(size / binsize);
+	int blks = 0;
 
-    set_size( n );
+	set_size( n );
 
 	int* row_sizes = (int*) malloc(sizeof(int) * num_bin_row);
 	int* row_offsets = (int*) malloc(sizeof(int) * num_bin_row+1);
@@ -188,16 +188,17 @@ int main( int argc, char **argv )
 	//This is most likely overallocation, but there is no way it will exceed this boundary.
 	int* thread_rows = (int*) malloc(sizeof(int) * num_bin_row);
 	int* thread_offset = (int*) malloc(sizeof(int) * num_bin_row+1);
-
+	printf("Malloced arrays properly\n");
 	std::vector<particle_t> bins[num_bin_row];
 
-    init_particles( n, particles );
+	init_particles( n, particles );
 
-    //put particles in row bins according to their y position
+	//put particles in row bins according to their y position
 	for (int j = 0; j < n; j++) {
 		int y = floor(particles[j].y / binsize);
 		bins[y].push_back(particles[j]);
 	}
+	printf("Bins sorted\n");
 	//Create the sorted particle array and row sizes/offsets array.
 	int num_rows = 0;
 	thread_rows[0] = 0;
@@ -216,51 +217,52 @@ int main( int argc, char **argv )
 		}
 		num_rows++;
 	}
+	printf("sorted array populated\n");
 	//We can only malloc space for device thread offsets after we know how large blks is.
-    int* d_toff;
-    int* d_roff;
-    cudaMalloc((void **) &d_toff, blks * sizeof(int));
-    cudaMalloc((void **) &d_roff, (num_bin_row+1) * sizeof(int));
+	int* d_toff;
+	int* d_roff;
+	cudaMalloc((void **) &d_toff, blks * sizeof(int));
+	cudaMalloc((void **) &d_roff, (num_bin_row+1) * sizeof(int));
 
-    //
-    //  simulate a number of time steps
-    //
-    cudaThreadSynchronize();
-    double simulation_time = read_timer( );
+	//
+	//  simulate a number of time steps
+	//
+	cudaThreadSynchronize();
+	double simulation_time = read_timer( );
 
-    for( int step = 0; step < NSTEPS; step++ )
-    {
-	    cudaThreadSynchronize();
-	    double copy_time = read_timer( );
+	for( int step = 0; step < NSTEPS; step++ )
+	{
+		cudaThreadSynchronize();
+		double copy_time = read_timer( );
 
-	    // Copy the *Sorted* particles to the GPU
-	    cudaMemcpy(d_particles, sorted, n * sizeof(particle_t), cudaMemcpyHostToDevice);
-	    // We also want thread offsets and row offsets
-	    cudaMemcpy(d_toff, sorted, blks * sizeof(int), cudaMemcpyHostToDevice);
-	    cudaMemcpy(d_roff, sorted, (num_bin_row+1) * sizeof(int), cudaMemcpyHostToDevice);
-
-	    cudaThreadSynchronize();
-	    copy_time = read_timer( ) - copy_time;
-	    copy_time_accum+= copy_time;
+		// Copy the *Sorted* particles to the GPU
+		cudaMemcpy(d_particles, sorted, n * sizeof(particle_t), cudaMemcpyHostToDevice);
+		// We also want thread offsets and row offsets
+		cudaMemcpy(d_toff, sorted, blks * sizeof(int), cudaMemcpyHostToDevice);
+		cudaMemcpy(d_roff, sorted, (num_bin_row+1) * sizeof(int), cudaMemcpyHostToDevice);
+		printf("particles and offsets memcpy'd\n");
+		cudaThreadSynchronize();
+		copy_time = read_timer( ) - copy_time;
+		copy_time_accum+= copy_time;
 		compute_forces_gpu <<< blks, NUM_THREADS >>> (d_particles, n, d_toff, d_roff);
-		
+		printf("Compute_Forces complete\n");
 		move_gpu <<< blks, NUM_THREADS >>> (d_particles, n, size);
-
+		printf("move_gpu complete\n");
 		//This may cause a lot of overhead... 
 		//If we manage to do bookkeeping within move_gpu, we will not need this copy overhead..
 		cudaMemcpy(sorted, d_particles, n * sizeof(particle_t), cudaMemcpyDeviceToHost);
-        
-        //
-        //  save if necessary
-        //
-        if( fsave && (step%SAVEFREQ) == 0 ) {
-	    // Copy the particles back to the CPU
-            cudaMemcpy(particles, d_particles, n * sizeof(particle_t), cudaMemcpyDeviceToHost);
-            save( fsave, n, particles);
+		
+		//
+		//  save if necessary
+		//
+		if( fsave && (step%SAVEFREQ) == 0 ) {
+		// Copy the particles back to the CPU
+			cudaMemcpy(particles, d_particles, n * sizeof(particle_t), cudaMemcpyDeviceToHost);
+			save( fsave, n, particles);
 		}
 		for (int i = 0; i < num_bin_row; i++)
 			bins[i].clear();
-	    //put particles in row bins according to their y position
+		//put particles in row bins according to their y position
 		for (int j = 0; j < n; j++) {
 			int y = floor(sorted[j].y / binsize);
 			bins[y].push_back(sorted[j]);
@@ -284,25 +286,25 @@ int main( int argc, char **argv )
 			num_rows++;
 		}
 
-    }
-    cudaThreadSynchronize();
-    simulation_time = read_timer( ) - simulation_time;
-    
-    printf( "CPU-GPU copy time = %g seconds\n", copy_time_accum);
-    printf( "n = %d, simulation time = %g seconds\n", n, simulation_time );
-    
-    free( particles );
-    free( sorted );
-    free( row_offsets );
-    free( row_sizes );
-    free( row_capacity );
-    free( thread_rows );
-    free( thread_offset );
-    cudaFree(d_roff);
-    cudaFree(d_toff);
-    cudaFree(d_particles);
-    if( fsave )
-        fclose( fsave );
-    
-    return 0;
+	}
+	cudaThreadSynchronize();
+	simulation_time = read_timer( ) - simulation_time;
+	
+	printf( "CPU-GPU copy time = %g seconds\n", copy_time_accum);
+	printf( "n = %d, simulation time = %g seconds\n", n, simulation_time );
+	
+	free( particles );
+	free( sorted );
+	free( row_offsets );
+	free( row_sizes );
+	free( row_capacity );
+	free( thread_rows );
+	free( thread_offset );
+	cudaFree(d_roff);
+	cudaFree(d_toff);
+	cudaFree(d_particles);
+	if( fsave )
+		fclose( fsave );
+	
+	return 0;
 }
