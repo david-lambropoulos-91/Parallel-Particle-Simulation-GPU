@@ -245,14 +245,14 @@ int main( int argc, char **argv )
 		// We also want thread offsets and row offsets
 		cudaMemcpy(d_toff, thread_offset, blks * sizeof(int), cudaMemcpyHostToDevice);
 		cudaMemcpy(d_roff, row_offsets, (num_bin_row+1) * sizeof(int), cudaMemcpyHostToDevice);
-		printf("particles and offsets memcpyied\n");
+		//printf("particles and offsets memcpyied\n");
 		cudaThreadSynchronize();
 		copy_time = read_timer( ) - copy_time;
 		copy_time_accum+= copy_time;
 		compute_forces_gpu <<< blks, NUM_THREADS >>> (d_particles, n, d_toff, d_roff);
-		printf("Compute_Forces complete\n");
+		//printf("Compute_Forces complete\n");
 		move_gpu <<< blks, NUM_THREADS >>> (d_particles, n, size);
-		printf("move_gpu complete\n");
+		//printf("move_gpu complete\n");
 		//This may cause a lot of overhead... 
 		//If we manage to do bookkeeping within move_gpu, we will not need this copy overhead..
 		cudaMemcpy(particles, d_particles, n * sizeof(particle_t), cudaMemcpyDeviceToHost);
