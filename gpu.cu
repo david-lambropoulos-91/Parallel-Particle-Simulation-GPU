@@ -189,7 +189,7 @@ int main( int argc, char **argv )
 	int* thread_rows = (int*) malloc(sizeof(int) * num_bin_row);
 	int* thread_offset = (int*) malloc(sizeof(int) * num_bin_row+1);
 
-	vector<particle_t> bins[num_bin_row];
+	std::vector<particle_t> bins[num_bin_row];
 
     init_particles( n, particles );
 
@@ -275,10 +275,10 @@ int main( int argc, char **argv )
 			row_offsets[i+1] = row_offsets[i] + bins[i].size();
 			//Latter part of loop handles cuda thread row allocation
 			num_rows += row_sizes[i];
-			if(accum > 256){
+			if(num_rows > 256){
 				thread_rows[blks] = num_rows;
 				blks++;
-				thread_offset[ai] = i;
+				thread_offset[blks] = i;
 				num_rows = 0;
 			}
 			num_rows++;
