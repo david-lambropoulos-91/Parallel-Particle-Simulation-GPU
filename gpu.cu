@@ -30,9 +30,11 @@ __device__ void apply_force_gpu(particle_t &particle, particle_t &neighbor)
 	double dy = neighbor.y - particle.y;
 	double r2 = dx * dx + dy * dy;
 	if( r2 > cutoff*cutoff )
+	{
 		return;
+	}
 	//r2 = fmax( r2, min_r*min_r );
-	r2 = (r2 > min_r*min_r) ? r2 : min_r*min_r;
+	r2 = ( r2 > min_r * min_r ) ? r2 : min_r * min_r;
 	double r = sqrt( r2 );
 
 	//
@@ -44,54 +46,58 @@ __device__ void apply_force_gpu(particle_t &particle, particle_t &neighbor)
 
 }
 
-__global__ void compute_forces_gpu(particle_t * particles, int n, int* thread_offset, int* row_offset)
+__global__ void compute_forces_gpu( particle_t * particles, int n, int* thread_offset, int* row_offset )
 {
 	// Get thread (particle) ID
 	//int tid = threadIdx.x + blockIdx.x * blockDim.x;
-	//if(tid >= n) return;
-	
-	int preparticles = row_offset[thread_offset[blockIdx.x]];
-	int postparticles = row_offset[thread_offset[blockIdx.x +1]];
-
+	//if(tid >= n) return;	
+	int preparticles = row_offset[ thread_offset[ blockIdx.x ] ];
+	int postparticles = row_offset[ thread_offset[ blockIdx.x + 1 ] ];
 	int workingThreads = postparticles - preparticles;
-	if(threadIdx.x >= workingThreads)
+
+	if( threadIdx.x >= workingThreads )
+	{
 		return;
+	}
 
 	//Total shared memory allocation: 6 kb
-	__shared__ particle_t local[256];//2kb
-	__shared__ particle_t haloAbove[256];
-	__shared__ particle_t haloBelow[256];
+	__shared__ particle_t local[ 256 ];//2kb
+	__shared__ particle_t haloAbove[ 256 ];
+	__shared__ particle_t haloBelow[ 256 ];
+
 	//The full halo allocation will generally not be used.
-
-
 	int tHaloSize = 0;
 	int bHaloSize = 0;
 	int tHaloStart = 0;
 	int bHaloStart = 0;
 	int bHaloEnd = 0;
 
-	local[threadIdx.x] = particles[preparticles + threadIdx.x]; 
+	local[ threadIdx.x ] = particles[ preparticles + threadIdx.x ]; 
 	
-	if(blockIdx.x > 0 )
+	if( blockIdx.x > 0 )
 	{
-		tHaloStart = row_offset[thread_offset[blockIdx.x] - 1];
+		tHaloStart = row_offset[ thread_offset[ blockIdx.x ] - 1 ];
 		tHaloSize = preparticles - tHaloStart;
-		if(threadIdx.x < tHaloSize)
-		//Create the upper halo region
+		if( threadIdx.x < tHaloSize )
+		{
+			//Create the upper halo region
 			haloAbove[threadIdx.x] = particles[tHaloStart + threadIdx.x];
+		}
 	}
 
-	if(blockIdx.x < gridDim.x - 1 )
+	if( blockIdx.x < gridDim.x - 1 )
 	{
-		bHaloStart = row_offset[thread_offset[blockIdx.x + 1]];
-		bHaloEnd = row_offset[thread_offset[blockIdx.x + 1] +1];
+		bHaloStart = row_offset[ thread_offset[ blockIdx.x + 1 ] ];
+		bHaloEnd = row_offset[ thread_offset[ blockIdx.x + 1 ] + 1 ];
 		bHaloSize = bHaloEnd - bHaloStart;
-		if(threadIdx.x < bHaloSize)
-		//Create the lower halo region
+		if( threadIdx.x < bHaloSize )
+		{
+			//Create the lower halo region
 			haloBelow[threadIdx.x] = particles[bHaloStart + threadIdx.x];
+		}
 	}
 
-	__syncthreads();
+	__syncthreads( );
 	//Now do binning for all particles in every thread, 
 	//and also bin the hal o regions if they exist.
 
@@ -101,30 +107,36 @@ __global__ void compute_forces_gpu(particle_t * particles, int n, int* thread_of
 	//Time complexity check: ... for thread blocks of size M (~256), 
 	//We do M^2 checks to find neighbors
 	//There are N/M +1 thread blocks, making the resulting complexity O(NM)~~ O(N) given M<256
-	local[threadIdx.x].ax = local[threadIdx.x].ay = 0;
+	local[ threadIdx.x ].ax = local[ threadIdx.x ].ay = 0;
 
-	for(int i = 0; i < workingThreads; i++){
-		apply_force_gpu( local[threadIdx.x], local[i] );
+	for( int i = 0; i < workingThreads; i++ )
+	{
+		apply_force_gpu( local[ threadIdx.x ], local[ i ] );
 	}
-	for(int i = 0; i < tHaloSize; i++){
-		apply_force_gpu(local[threadIdx.x], haloAbove[i]);
+	for( int i = 0; i < tHaloSize; i++ )
+	{
+		apply_force_gpu(local[ threadIdx.x ], haloAbove[ i ] );
 	}
-	for(int i = 0; i < bHaloSize; i++){
-		apply_force_gpu(local[threadIdx.x], haloBelow[i]);
+	for( int i = 0; i < bHaloSize; i++ )
+	{
+		apply_force_gpu( local[ threadIdx.x ], haloBelow[ i ] );
 	}
 	//Potentially need to synchronize here...? Maybe not.
 	//Copy shared local back into global here
-	particles[preparticles + threadIdx.x] = local[threadIdx.x];
+	particles[ preparticles + threadIdx.x ] = local[ threadIdx.x ];
 }
 
-__global__ void move_gpu (particle_t * particles, int n, double size)
+__global__ void move_gpu ( particle_t * particles, int n, double size )
 {
 
 	// Get thread (particle) ID
 	int tid = threadIdx.x + blockIdx.x * blockDim.x;
-	if(tid >= n) return;
+	if( tid >= n ) 
+	{
+		return;
+	}
 
-	particle_t * p = &particles[tid];
+	particle_t * p = &particles[ tid ];
 	//
 	//  slightly simplified Velocity Verlet integration
 	//  conserves energy better than explicit Euler method
@@ -139,13 +151,13 @@ __global__ void move_gpu (particle_t * particles, int n, double size)
 	//
 	while( p->x < 0 || p->x > size )
 	{
-		p->x  = p->x < 0 ? -(p->x) : 2*size-p->x;
-		p->vx = -(p->vx);
+		p->x  = p->x < 0 ? -( p->x ) : 2 * size-p->x;
+		p->vx = -( p->vx );
 	}
 	while( p->y < 0 || p->y > size )
 	{
-		p->y  = p->y < 0 ? -(p->y) : 2*size-p->y;
-		p->vy = -(p->vy);
+		p->y  = p->y < 0 ? -( p->y ) : 2 * size-p->y;
+		p->vy = -( p->vy );
 	}
 
 }
@@ -157,7 +169,7 @@ int main( int argc, char **argv )
 	// This takes a few seconds to initialize the runtime
 	if( ( err =cudaThreadSynchronize( ) ) != cudaSuccess )
 	{
-		fprintf(stderr, "cudaThreadSynchronize() not successful at line %d in file %s\nError Output: %s\n", __LINE__, __FILE__, cudaGetErrorString(err));
+		fprintf(stderr, "cudaThreadSynchronize( ) not successful at line %d in file %s\nError Output: %s\n", __LINE__, __FILE__, cudaGetErrorString(err));
 		return -1;
 	}
 
@@ -322,10 +334,10 @@ int main( int argc, char **argv )
 		// Copy the *Sorted* particles to the GPU
 		cudaMemcpy( d_particles, sorted, n * sizeof( particle_t ), cudaMemcpyHostToDevice );
 
-//		if((err = cudaGetLastError()) != cudaSuccess) 
-//		{
-//			fprintf(stderr, "cudaMemcpy not successful at line %d in file %s\nError Output: %s\ni=%d", __LINE__, __FILE__, cudaGetErrorString(err), step );
-//		}
+		//	if((err = cudaGetLastError()) != cudaSuccess) 
+		//	{
+		//		fprintf(stderr, "cudaMemcpy not successful at line %d in file %s\nError Output: %s\ni=%d", __LINE__, __FILE__, cudaGetErrorString(err), step );
+		//	}
 		// We also want thread offsets and row offsets
 		
 		cudaMemcpy( d_toff, thread_offset, blks * sizeof( int ), cudaMemcpyHostToDevice );
@@ -416,6 +428,7 @@ int main( int argc, char **argv )
 	cudaFree( d_roff );
 	cudaFree( d_toff );
 	cudaFree( d_particles );
+
 	if( fsave )
 	{
 		fclose( fsave );
